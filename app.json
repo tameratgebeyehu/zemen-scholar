@@ -15,9 +15,11 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zemenscholar.app"
     },
     "android": {
+      "package": "com.zemenscholar.app",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/black icon.png",
         "backgroundColor": "#FFFFFF"
@@ -25,10 +27,12 @@
     },
     "web": {
       "favicon": "./src/assets/black icon.png"
-    }
-
-
-
-
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0573a058-6bce-43ff-9b4c-2e8f058d793c"
+      }
+    },
+    "owner": "tamerat"
   }
 }
