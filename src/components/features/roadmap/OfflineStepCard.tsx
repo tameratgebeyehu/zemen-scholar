@@ -14,11 +14,12 @@ interface Props {
   onToggleStatus: (id: string, newStatus: StepStatus) => void;
   isFirst: boolean;
   isLast: boolean;
+  isExpanded: boolean;
+  onExpand: () => void;
 }
 
-export const OfflineStepCard = ({ step, status, onToggleStatus, isFirst, isLast }: Props) => {
+export const OfflineStepCard = ({ step, status, onToggleStatus, isFirst, isLast, isExpanded, onExpand }: Props) => {
   const theme = useAppTheme();
-  const [isExpanded, setIsExpanded] = useState(false);
   const isCompleted = status === 'completed';
   const isInProgress = status === 'in_progress';
   const isNotStarted = status === 'not_started';
@@ -62,7 +63,7 @@ export const OfflineStepCard = ({ step, status, onToggleStatus, isFirst, isLast 
       ]}>
         <TouchableOpacity 
           style={[styles.cardHeader, isExpanded && { marginBottom: 12 }]}
-          onPress={() => setIsExpanded(!isExpanded)}
+          onPress={onExpand}
           activeOpacity={0.7}
         >
           <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{step.title}</Text>

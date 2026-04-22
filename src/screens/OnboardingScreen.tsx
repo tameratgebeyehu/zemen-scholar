@@ -1,12 +1,11 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, ViewToken } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, ViewToken } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, BookOpen, Map, GraduationCap } from 'lucide-react-native';
 import { theme } from '../theme/theme';
 import { OnboardingOption } from '../components/onboarding/OnboardingOption';
 import { useAppContext } from '../context/AppContext';
 
-const { width } = Dimensions.get('window');
+import { useResponsive } from '../hooks/useResponsive';
 
 interface Props {
   onComplete: () => void;
@@ -56,6 +55,7 @@ const INTRO_SLIDES = [
 
 export const OnboardingScreen = ({ onComplete }: Props) => {
   const { updateUser } = useAppContext();
+  const { currentContentWidth, isTablet } = useResponsive();
   
   const flatListRef = useRef<FlatList>(null);
   const [currentStep, setCurrentStep] = useState(0);
@@ -101,18 +101,18 @@ export const OnboardingScreen = ({ onComplete }: Props) => {
   const renderSlide = ({ item }: { item: typeof INTRO_SLIDES[0] }) => {
     if (item.type === 'intro') {
       return (
-        <View style={styles.slideContainer}>
-          <View style={styles.iconWrapper}>
+        <View style={[styles.slideContainer, { width: currentContentWidth }]}>
+          <View style={[styles.iconWrapper, isTablet && { marginTop: 40 }]}>
             {item.icon}
           </View>
-          <Text style={styles.introTitle}>{item.title}</Text>
-          <Text style={styles.introSubtitle}>{item.subtitle}</Text>
+          <Text style={[styles.introTitle, isTablet && { fontSize: 36 }]}>{item.title}</Text>
+          <Text style={[styles.introSubtitle, isTablet && { fontSize: 18, marginBottom: 40 }]}>{item.subtitle}</Text>
           
-          <View style={styles.bulletList}>
+          <View style={[styles.bulletList, isTablet && { padding: 32 }]}>
             {item.bullets?.map((bullet, idx) => (
               <View key={idx} style={styles.bulletItem}>
                 <View style={styles.bulletDot} />
-                <Text style={styles.bulletText}>{bullet}</Text>
+                <Text style={[styles.bulletText, isTablet && { fontSize: 17 }]}>{bullet}</Text>
               </View>
             ))}
           </View>
@@ -121,10 +121,10 @@ export const OnboardingScreen = ({ onComplete }: Props) => {
     }
 
     return (
-      <View style={styles.slideContainer}>
+      <View style={[styles.slideContainer, { width: currentContentWidth }]}>
         <View style={styles.questionContainer}>
-          <Text style={styles.questionTitle}>{item.title}</Text>
-          <Text style={styles.questionSubtitle}>{item.subtitle}</Text>
+          <Text style={[styles.questionTitle, isTablet && { fontSize: 36 }]}>{item.title}</Text>
+          <Text style={[styles.questionSubtitle, isTablet && { fontSize: 17 }]}>{item.subtitle}</Text>
           
           <ScrollView 
             style={styles.optionsScrollContainer} 
@@ -242,7 +242,6 @@ const styles = StyleSheet.create({
   },
   // Slide Container
   slideContainer: {
-    width, // Matches window width per slide
     flex: 1,
     paddingHorizontal: theme.spacing.xl,
     paddingBottom: 10,

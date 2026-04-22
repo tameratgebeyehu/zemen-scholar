@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform } from 'react-native';
 import { ChevronDown, ChevronUp, CheckCircle2, CircleDot, CircleDashed, Lightbulb, AlertTriangle, Check } from 'lucide-react-native';
 import { useAppTheme } from '../../context/AppContext';
 import { theme as baseTheme } from '../../theme/theme';
@@ -8,25 +8,19 @@ import { OfflineStep } from '../../types';
 import { Card } from '../common/Card';
 import { PremiumTouchable } from '../common/PremiumTouchable';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// ProcessStepCard component logic follows...
 
 interface Props {
   step: OfflineStep;
   status: StepStatus;
   isLast?: boolean;
+  isExpanded: boolean;
+  onExpand: () => void;
   onUpdateStatus: (id: string, newStatus: StepStatus) => void;
 }
 
-export const ProcessStepCard = ({ step, status, isLast = false, onUpdateStatus }: Props) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+export const ProcessStepCard = ({ step, status, isLast = false, isExpanded, onExpand, onUpdateStatus }: Props) => {
   const theme = useAppTheme();
-
-  const toggleExpand = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setIsExpanded(!isExpanded);
-  };
 
   const isCompleted = status === 'completed';
   const isInProgress = status === 'in_progress';
@@ -66,7 +60,7 @@ export const ProcessStepCard = ({ step, status, isLast = false, onUpdateStatus }
       <View style={{ flex: 1 }}>
         <TouchableOpacity 
           activeOpacity={0.9} 
-          onPress={toggleExpand}
+          onPress={onExpand}
           style={[
             styles.card, 
             { backgroundColor: theme.colors.card, borderColor: theme.colors.border },

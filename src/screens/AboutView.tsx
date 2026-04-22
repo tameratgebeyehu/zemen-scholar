@@ -5,16 +5,17 @@ import { ArrowLeft, Target, Eye, Shield, Award, HelpCircle, ChevronRight, Zap, G
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/AppContext';
 import { theme as baseTheme } from '../theme/theme';
-
-const { width } = Dimensions.get('window');
+import { useResponsive } from '../hooks/useResponsive';
 
 interface Props {
   onBack: () => void;
   onNavigate: (route: string) => void;
 }
 
-export const AboutUsScreen = ({ onBack, onNavigate }: Props) => {
+export const AboutView = ({ onBack, onNavigate }: Props) => {
   const theme = useAppTheme();
+  const { currentContentWidth, isTablet } = useResponsive();
+  
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
@@ -34,8 +35,10 @@ export const AboutUsScreen = ({ onBack, onNavigate }: Props) => {
     ]).start();
   }, []);
 
+  const pillarWidth = isTablet ? (currentContentWidth - 40 - 16) / 2 : '100%';
+
   const PillarCard = ({ icon: Icon, title, desc, delay }: { icon: any, title: string, desc: string, delay: number }) => (
-    <View style={[styles.pillarCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+    <View style={[styles.pillarCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, width: pillarWidth }]}>
       <LinearGradient
         colors={[theme.colors.primary + '20', theme.colors.primary + '05']}
         start={{ x: 0, y: 0 }}
@@ -84,18 +87,20 @@ export const AboutUsScreen = ({ onBack, onNavigate }: Props) => {
 
           {/* Pillars */}
           <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>THE MANIFESTO</Text>
-          <PillarCard 
-            icon={Target}
-            title="Our Mission"
-            desc="To empower Ethiopian students to secure fully-funded international scholarships entirely by themselves—ignoring paid consultants, agencies, or money-takers. We provide the roadmap; you drive the journey."
-            delay={100}
-          />
-          <PillarCard 
-            icon={Eye}
-            title="Our Vision"
-            desc="An Ethiopia where every student is self-reliant and fully equipped to compete globally, breaking financial barriers through their own merit and absolute determination."
-            delay={200}
-          />
+          <View style={isTablet ? styles.pillarGrid : null}>
+            <PillarCard 
+              icon={Target}
+              title="Our Mission"
+              desc="To empower Ethiopian students to secure fully-funded international scholarships entirely by themselves—ignoring paid consultants, agencies, or money-takers. We provide the roadmap; you drive the journey."
+              delay={100}
+            />
+            <PillarCard 
+              icon={Eye}
+              title="Our Vision"
+              desc="An Ethiopia where every student is self-reliant and fully equipped to compete globally, breaking financial barriers through their own merit and absolute determination."
+              delay={200}
+            />
+          </View>
 
           <View style={styles.spacer} />
 
@@ -224,6 +229,11 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     textTransform: 'uppercase',
   },
+  pillarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
   pillarCard: {
     flexDirection: 'row',
     padding: 24,
@@ -261,11 +271,12 @@ const styles = StyleSheet.create({
   valuesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    justifyContent: 'space-between',
+    rowGap: 16,
     marginBottom: 32,
   },
   valueCard: {
-    width: (width - 40 - 16) / 2,
+    width: '48%',
     padding: 20,
     borderRadius: 24,
     borderWidth: 1.5,

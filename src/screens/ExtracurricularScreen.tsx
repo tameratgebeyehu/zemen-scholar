@@ -1,14 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Star, Award, Users, Code, BookOpen, Heart, Rocket } from 'lucide-react-native';
 import { useAppTheme } from '../context/AppContext';
 import { theme as baseTheme } from '../theme/theme';
 import { PremiumTouchable } from '../components/common/PremiumTouchable';
 import { EXTRACURRICULAR_DATA } from '../constants/appData';
-
-const { width } = Dimensions.get('window');
-const TILE_WIDTH = (width - 52) / 2;
+import { useResponsive } from '../hooks/useResponsive';
 
 interface Props {
   onBack: () => void;
@@ -17,6 +15,11 @@ interface Props {
 
 export const ExtracurricularScreen = ({ onBack, onNavigate }: Props) => {
   const theme = useAppTheme();
+  const { isTablet } = useResponsive();
+  const { width } = useWindowDimensions();
+  // Always 2-column. Measure actual device width directly.
+  const horizontalPadding = isTablet ? 80 : 40;
+  const tileWidth = Math.floor((Math.min(width, isTablet ? 850 : width) - horizontalPadding - 12) / 2);
 
   const getIconForCategory = (id: string) => {
     switch (id) {
@@ -86,7 +89,7 @@ export const ExtracurricularScreen = ({ onBack, onNavigate }: Props) => {
             return (
               <PremiumTouchable 
                 key={item.id}
-                style={[styles.tile, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                style={[styles.tile, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, width: tileWidth }]}
                 onPress={() => onNavigate(item.id)}
                 elevation={2}
               >
@@ -202,7 +205,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   tile: {
-    width: TILE_WIDTH,
     padding: 20,
     borderRadius: 24,
     borderWidth: 1,

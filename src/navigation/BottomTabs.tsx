@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Home, Map, FileText, Globe, Menu } from 'lucide-react-native';
 import { useAppTheme } from '../context/AppContext';
 import { theme as baseTheme } from '../theme/theme';
+import { useResponsive } from '../hooks/useResponsive';
 
 export type TabType = 'home' | 'roadmap' | 'documents' | 'visa' | 'more';
 
@@ -14,6 +15,8 @@ interface Props {
 
 export const BottomTabs = ({ activeTab, onTabPress }: Props) => {
   const theme = useAppTheme();
+  const { isTablet, maxContentWidth } = useResponsive();
+  
   const tabs: { id: TabType; label: string; icon: any }[] = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'roadmap', label: 'Roadmap', icon: Map },
@@ -23,8 +26,24 @@ export const BottomTabs = ({ activeTab, onTabPress }: Props) => {
   ];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.card, borderTopColor: theme.colors.border }]}>
-      <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.colors.card }}>
+    <View style={[
+      styles.container, 
+      { 
+        backgroundColor: theme.colors.card, 
+        borderTopColor: theme.colors.border,
+      },
+      isTablet && {
+        maxWidth: maxContentWidth,
+        alignSelf: 'center',
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
+        borderLeftColor: theme.colors.border,
+        borderRightColor: theme.colors.border,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+      }
+    ]}>
+      <SafeAreaView edges={['bottom']} style={{ backgroundColor: 'transparent' }}>
         <View style={styles.tabBar}>
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -70,7 +89,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     borderTopWidth: 1,
-    paddingTop: 8,
+    paddingTop: 4,
     // Add shadow
     ...Platform.select({
       ios: {

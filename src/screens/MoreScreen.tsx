@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Linking, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   ChevronRight, 
@@ -17,14 +17,15 @@ import {
   Target,
   Calculator,
   Users,
-  Shield
+  Shield,
+  Youtube,
+  Link
 } from 'lucide-react-native';
 import { theme as baseTheme } from '../theme/theme';
 import { useAppTheme } from '../context/AppContext';
 import { PremiumTouchable } from '../components/common/PremiumTouchable';
 
-const { width } = Dimensions.get('window');
-const TILE_WIDTH = (width - 52) / 2;
+import { useResponsive } from '../hooks/useResponsive';
 
 interface Props {
   onNavigate?: (route: string) => void;
@@ -34,7 +35,15 @@ interface Props {
 
 export const MoreScreen = ({ onNavigate, initialScrollY = 0, onScrollChange }: Props) => {
   const theme = useAppTheme();
+  const { currentContentWidth, isTablet } = useResponsive();
   const scrollRef = useRef<ScrollView>(null);
+  const { width } = useWindowDimensions();
+
+  // Always show 2 columns. Calculate tile width from the actual scroll container padding.
+  const horizontalPadding = isTablet ? 40 : 20;
+  const columnGap = 16;
+  const availableWidth = (isTablet ? Math.min(width, 850) : width) - horizontalPadding * 2 - columnGap;
+  const tileWidth = Math.floor(availableWidth / 2);
 
   // Restore scroll position on mount
   useEffect(() => {
@@ -55,43 +64,6 @@ export const MoreScreen = ({ onNavigate, initialScrollY = 0, onScrollChange }: P
     if (onNavigate) onNavigate(id);
   };
 
-  const ResourceTile = ({ item }: { item: any }) => {
-    const Icon = item.icon;
-    return (
-      <PremiumTouchable 
-        style={[styles.tile, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-        onPress={() => handlePress(item.id)}
-        elevation={2}
-      >
-        <View style={[styles.tileIconBox, { backgroundColor: theme.colors.primary + '15' }]}>
-          <Icon color={theme.colors.primary} size={24} />
-        </View>
-        <Text style={[styles.tileTitle, { color: theme.colors.text }]}>{item.title}</Text>
-        <Text style={[styles.tileSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={2}>
-          {item.desc}
-        </Text>
-      </PremiumTouchable>
-    );
-  };
-
-  const MenuRow = ({ item, isLast }: { item: any, isLast: boolean }) => {
-    const Icon = item.icon;
-    return (
-      <PremiumTouchable
-        style={[styles.menuRow, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.colors.border }]}
-        onPress={() => handlePress(item.id)}
-      >
-        <View style={styles.rowLeft}>
-          <View style={[styles.rowIconBox, { backgroundColor: theme.colors.primary + '10' }]}>
-            <Icon color={theme.colors.primary} size={18} />
-          </View>
-          <Text style={[styles.rowTitle, { color: theme.colors.text }]}>{item.title}</Text>
-        </View>
-        <ChevronRight color={theme.colors.textSecondary} size={18} />
-      </PremiumTouchable>
-    );
-  };
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <View style={styles.header}>
@@ -101,7 +73,7 @@ export const MoreScreen = ({ onNavigate, initialScrollY = 0, onScrollChange }: P
 
       <ScrollView 
         ref={scrollRef}
-        contentContainerStyle={styles.scrollContent} 
+        contentContainerStyle={[styles.scrollContent, isTablet && { paddingHorizontal: 40 }]} 
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={(e) => {
@@ -112,62 +84,24 @@ export const MoreScreen = ({ onNavigate, initialScrollY = 0, onScrollChange }: P
       >
         {/* Resource Tiles Grid */}
         <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>LEARNING TOOLS</Text>
-        <View style={styles.grid}>
-          <ResourceTile item={{ 
-            id: 'qa', 
-            title: 'Q&A', 
-            desc: 'General study abroad questions', 
-            icon: MessageCircle 
-          }} />
-          <ResourceTile item={{ 
-            id: 'visa_qa', 
-            title: 'Visa Prep', 
-            desc: 'Master the interview process', 
-            icon: Mic 
-          }} />
-          <ResourceTile item={{ 
-            id: 'words_to_know', 
-            title: 'Glossary', 
-            desc: 'Terms you must know', 
-            icon: Book 
-          }} />
-          <ResourceTile item={{ 
-            id: 'extracurricular', 
-            title: 'Activities', 
-            desc: 'Build your profile', 
-            icon: Star 
-          }} />
-          <ResourceTile item={{ 
-            id: 'scholarship_insights', 
-            title: 'Insights', 
-            desc: 'Preparation strategy', 
-            icon: Lightbulb
-          }} />
-          <ResourceTile item={{ 
-            id: 'timeline_strategy', 
-            title: 'Strategy', 
-            desc: 'Timeline & Selecting', 
-            icon: Target
-          }} />
-          <ResourceTile item={{ 
-            id: 'gpa_calculator', 
-            title: 'GPA Calc', 
-            desc: 'Ethiopia to US Scale', 
-            icon: Calculator
-          }} />
-        </View>
-
-        {/* Connect Section */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary, marginTop: 12 }]}>EXPLORE</Text>
-        <View style={[styles.listCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <MenuRow item={{ id: 'more_info', title: 'Resources & Video Guide', icon: Info }} isLast={true} />
+        <View style={[styles.grid, isTablet && { justifyContent: 'space-between' }]}>
+          <ResourceTile item={{ id: 'qa', title: 'Q&A', desc: 'General study abroad questions', icon: MessageCircle }} theme={theme} tileWidth={tileWidth} onPress={handlePress} />
+          <ResourceTile item={{ id: 'visa_qa', title: 'Visa Prep', desc: 'Master the interview process', icon: Mic }} theme={theme} tileWidth={tileWidth} onPress={handlePress} />
+          <ResourceTile item={{ id: 'words_to_know', title: 'Glossary', desc: 'Terms you must know', icon: Book }} theme={theme} tileWidth={tileWidth} onPress={handlePress} />
+          <ResourceTile item={{ id: 'extracurricular', title: 'Activities', desc: 'Build your profile', icon: Star }} theme={theme} tileWidth={tileWidth} onPress={handlePress} />
+          <ResourceTile item={{ id: 'scholarship_insights', title: 'Insights', desc: 'Preparation strategy', icon: Lightbulb }} theme={theme} tileWidth={tileWidth} onPress={handlePress} />
+          <ResourceTile item={{ id: 'timeline_strategy', title: 'Strategy', desc: 'Timeline & Selecting', icon: Target }} theme={theme} tileWidth={tileWidth} onPress={handlePress} />
+          <ResourceTile item={{ id: 'gpa_calculator', title: 'GPA Calc', desc: 'Ethiopia to US Scale', icon: Calculator }} theme={theme} tileWidth={tileWidth} onPress={handlePress} />
+          <ResourceTile item={{ id: 'video_guides', title: 'Video Guides', desc: 'Expert tutorials', icon: Youtube }} theme={theme} tileWidth={tileWidth} onPress={handlePress} />
+          <ResourceTile item={{ id: 'useful_resources', title: 'Useful Links', desc: 'Official databases', icon: Link }} theme={theme} tileWidth={tileWidth} onPress={handlePress} />
         </View>
 
         {/* System Section */}
+        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary, marginTop: 12 }]}>SYSTEM</Text>
         <View style={[styles.listCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <MenuRow item={{ id: 'about_us', title: 'About Zemen Scholar', icon: Users }} isLast={false} />
-          <MenuRow item={{ id: 'privacy', title: 'Privacy Policy', icon: Shield }} isLast={false} />
-          <MenuRow item={{ id: 'settings', title: 'App Settings', icon: Settings }} isLast={true} />
+          <MenuRow item={{ id: 'about_us', title: 'About Zemen Scholar', icon: Users }} isLast={false} theme={theme} onPress={handlePress} />
+          <MenuRow item={{ id: 'privacy', title: 'Privacy Policy', icon: Shield }} isLast={false} theme={theme} onPress={handlePress} />
+          <MenuRow item={{ id: 'settings', title: 'App Settings', icon: Settings }} isLast={true} theme={theme} onPress={handlePress} />
         </View>
 
         <View style={{ height: 40 }} />
@@ -175,6 +109,45 @@ export const MoreScreen = ({ onNavigate, initialScrollY = 0, onScrollChange }: P
     </SafeAreaView>
   );
 };
+
+const ResourceTile = ({ item, theme, tileWidth, onPress }: { item: any, theme: any, tileWidth: number, onPress: (id: string) => void }) => {
+  const Icon = item.icon;
+  return (
+    <PremiumTouchable 
+      style={[styles.tile, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, width: tileWidth }]}
+      onPress={() => onPress(item.id)}
+      elevation={2}
+    >
+      <View style={[styles.tileIconBox, { backgroundColor: theme.colors.primary + '15' }]}>
+        <Icon color={theme.colors.primary} size={24} />
+      </View>
+      <Text style={[styles.tileTitle, { color: theme.colors.text }]}>{item.title}</Text>
+      <Text style={[styles.tileSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+        {item.desc}
+      </Text>
+    </PremiumTouchable>
+  );
+};
+
+const MenuRow = ({ item, isLast, theme, onPress }: { item: any, isLast: boolean, theme: any, onPress: (id: string) => void }) => {
+  const Icon = item.icon;
+  return (
+    <PremiumTouchable
+      style={[styles.menuRow, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.colors.border }]}
+      onPress={() => onPress(item.id)}
+    >
+      <View style={styles.rowLeft}>
+        <View style={[styles.rowIconBox, { backgroundColor: theme.colors.primary + '10' }]}>
+          <Icon color={theme.colors.primary} size={18} />
+        </View>
+        <Text style={[styles.rowTitle, { color: theme.colors.text }]}>{item.title}</Text>
+      </View>
+      <ChevronRight color={theme.colors.textSecondary} size={18} />
+    </PremiumTouchable>
+  );
+};
+
+
 
 const styles = StyleSheet.create({
   container: {
@@ -209,18 +182,16 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 16,
     marginBottom: 24,
   },
   tile: {
-    width: TILE_WIDTH,
     padding: 20,
     borderRadius: 24,
     borderWidth: 1,
   },
   comingSoonTile: {
-    width: TILE_WIDTH,
-    height: 10, // Hidden or extremely small
+    height: 0, // Hidden
   },
   tileIconBox: {
     width: 44,

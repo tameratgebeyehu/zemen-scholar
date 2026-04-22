@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, LogBox } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ActivityIndicator, LogBox, BackHandler } from 'react-native';
 
 // Suppress known framework warnings that are safe to ignore
 LogBox.ignoreLogs([
@@ -17,7 +17,8 @@ import { MoreScreen } from './src/screens/MoreScreen';
 import { QAScreen } from './src/screens/QAScreen';
 import { VisaQAScreen } from './src/screens/VisaQAScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
-import { MoreInfoScreen } from './src/screens/MoreInfoScreen';
+import { VideoGuidesScreen } from './src/screens/VideoGuidesScreen';
+import { UsefulResourcesScreen } from './src/screens/UsefulResourcesScreen';
 import { WordsToKnowScreen } from './src/screens/WordsToKnowScreen';
 import { ExtracurricularScreen } from './src/screens/ExtracurricularScreen';
 import { ActivityDetailScreen } from './src/screens/ActivityDetailScreen';
@@ -25,20 +26,68 @@ import { SupportScreen } from './src/screens/SupportScreen';
 import { ScholarshipInsightsScreen } from './src/screens/ScholarshipInsightsScreen';
 import { TimelineStrategyScreen } from './src/screens/TimelineStrategyScreen';
 import { GPACalculatorScreen } from './src/screens/GPACalculatorScreen';
-import { AboutUsScreen } from './src/screens/AboutUsScreen';
+import { AboutView } from './src/screens/AboutView';
 import { BottomTabs, TabType } from './src/navigation/BottomTabs';
 import { AppProvider, useAppContext, useAppTheme } from './src/context/AppContext';
 import { theme } from './src/theme/theme';
+import { ResponsiveContainer } from './src/components/common/ResponsiveContainer';
 
-type AppRoute = 'splash' | 'onboarding' | 'main' | 'qa' | 'visa_qa' | 'settings' | 'more_info' | 'words_to_know' | 'extracurricular' | 'activity_detail' | 'socials' | 'support' | 'scholarship_insights' | 'timeline_strategy' | 'gpa_calculator' | 'about_us';
+type AppRoute = 'splash' | 'onboarding' | 'main' | 'qa' | 'visa_qa' | 'settings' | 'video_guides' | 'useful_resources' | 'words_to_know' | 'extracurricular' | 'activity_detail' | 'socials' | 'support' | 'scholarship_insights' | 'timeline_strategy' | 'gpa_calculator' | 'about_us';
 
 const AppContent = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>('splash');
+  const [navigationHistory, setNavigationHistory] = useState<AppRoute[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [visaInitialTab, setVisaInitialTab] = useState<'application' | 'visa'>('application');
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [moreScrollY, setMoreScrollY] = useState(0);
   const { isLoading, state } = useAppContext();
   const theme = useAppTheme();
+
+  const navigateTo = (route: AppRoute) => {
+    setNavigationHistory(prev => [...prev, currentRoute]);
+    setCurrentRoute(route);
+  };
+
+  const goBack = () => {
+    if (navigationHistory.length > 0) {
+      const newHistory = [...navigationHistory];
+      const prevRoute = newHistory.pop();
+      setNavigationHistory(newHistory);
+      setCurrentRoute(prevRoute!);
+      return true;
+    }
+    
+    // Tab back behavior: If we are not on home tab, go to home tab
+    if (currentRoute === 'main' && activeTab !== 'home') {
+      setActiveTab('home');
+      return true;
+    }
+    
+    return false; // Exit app
+  };
+
+  // Hardware Back Button Handling
+  useEffect(() => {
+    const backAction = () => {
+      return goBack();
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [currentRoute, navigationHistory, activeTab]);
+
+  // Handle auto-reset navigation
+  useEffect(() => {
+    if (!state.user.onboarding_completed && (currentRoute === 'main' || currentRoute === 'settings')) {
+      setCurrentRoute('onboarding');
+      setNavigationHistory([]);
+    }
+  }, [state.user.onboarding_completed]);
 
   if (isLoading) {
     return (
@@ -52,23 +101,28 @@ const AppContent = () => {
     switch (activeTab) {
       case 'home':
         return <HomeScreen onNavigate={(dest) => {
-          if (['home', 'roadmap', 'documents', 'visa', 'more'].includes(dest)) {
+          if (dest === 'visa_process') {
+            // Go to Visa tab AND land on the Visa (Embassy) section directly
+            setVisaInitialTab('visa');
+            setActiveTab('visa');
+          } else if (['home', 'roadmap', 'documents', 'visa', 'more'].includes(dest)) {
+            setVisaInitialTab('application'); // reset for normal visa tab access
             setActiveTab(dest as any);
           } else {
-            setCurrentRoute(dest as any);
+            navigateTo(dest as any);
           }
         }} />;
       case 'roadmap':
-        return <RoadmapScreen />;
+        return <RoadmapScreen onNavigate={(route) => navigateTo(route as AppRoute)} />;
       case 'documents':
         return <DocumentsGuideScreen />;
       case 'visa':
-        return <VisaScreen onNavigate={(route) => setCurrentRoute(route as AppRoute)} />;
+        return <VisaScreen initialTab={visaInitialTab} onNavigate={(route) => navigateTo(route as AppRoute)} />;
       case 'more':
       default:
         return (
           <MoreScreen 
-            onNavigate={(route) => setCurrentRoute(route as AppRoute)} 
+            onNavigate={(route) => navigateTo(route as AppRoute)} 
             initialScrollY={moreScrollY}
             onScrollChange={setMoreScrollY}
           />
@@ -83,41 +137,43 @@ const AppContent = () => {
       case 'onboarding':
         return <OnboardingScreen onComplete={() => setCurrentRoute('main')} />;
       case 'qa':
-        return <QAScreen onBack={() => setCurrentRoute('main')} />;
+        return <QAScreen onBack={goBack} />;
       case 'visa_qa':
-        return <VisaQAScreen onBack={() => setCurrentRoute('main')} />;
+        return <VisaQAScreen onBack={goBack} />;
       case 'settings':
-        return <SettingsScreen onBack={() => setCurrentRoute('main')} />;
-      case 'more_info':
-        return <MoreInfoScreen onBack={() => setCurrentRoute('main')} />;
+        return <SettingsScreen onBack={goBack} />;
+      case 'video_guides':
+        return <VideoGuidesScreen onBack={goBack} />;
+      case 'useful_resources':
+        return <UsefulResourcesScreen onBack={goBack} />;
       case 'words_to_know':
-        return <WordsToKnowScreen onBack={() => setCurrentRoute('main')} />;
+        return <WordsToKnowScreen onBack={goBack} />;
       case 'extracurricular':
         return <ExtracurricularScreen 
-          onBack={() => setCurrentRoute('main')} 
+          onBack={goBack} 
           onNavigate={(id) => {
             setSelectedActivityId(id);
-            setCurrentRoute('activity_detail');
+            navigateTo('activity_detail');
           }} 
         />;
       case 'activity_detail':
         return <ActivityDetailScreen 
           activityId={selectedActivityId || ''}
-          onBack={() => setCurrentRoute('extracurricular')} 
+          onBack={goBack} 
         />;
       case 'support':
-        return <SupportScreen onBack={() => setCurrentRoute('main')} />;
+        return <SupportScreen onBack={goBack} />;
       case 'scholarship_insights':
-        return <ScholarshipInsightsScreen onBack={() => setCurrentRoute('main')} />;
+        return <ScholarshipInsightsScreen onBack={goBack} />;
       case 'timeline_strategy':
-        return <TimelineStrategyScreen onBack={() => setCurrentRoute('main')} />;
+        return <TimelineStrategyScreen onBack={goBack} />;
       case 'gpa_calculator':
-        return <GPACalculatorScreen onBack={() => setCurrentRoute('main')} />;
+        return <GPACalculatorScreen onBack={goBack} />;
       case 'about_us':
         return (
-          <AboutUsScreen 
-            onBack={() => setCurrentRoute('main')} 
-            onNavigate={(route) => setCurrentRoute(route as AppRoute)}
+          <AboutView 
+            onBack={goBack} 
+            onNavigate={(route: string) => navigateTo(route as AppRoute)}
           />
         );
       case 'main':
@@ -139,7 +195,9 @@ const AppContent = () => {
         backgroundColor={theme.colors.background}
         barStyle={state.user.app_theme === 'dark' ? "light-content" : "dark-content"}
       />
-      {renderScreen()}
+      <ResponsiveContainer>
+        {renderScreen()}
+      </ResponsiveContainer>
     </View>
   );
 };

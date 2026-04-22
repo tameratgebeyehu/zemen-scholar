@@ -8,6 +8,7 @@ export const lightColors = {
   warning: '#F59E0B',
   error: '#EF4444',
   border: '#E5E7EB',
+  info: '#0EA5E9',
 };
 
 export const darkColors = {
@@ -20,6 +21,7 @@ export const darkColors = {
   warning: '#FBBF24',
   error: '#F87171',
   border: '#374151',
+  info: '#38BDF8',
 };
 
 export const theme = {

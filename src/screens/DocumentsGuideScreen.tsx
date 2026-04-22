@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler } from 'react-native';
 import { ChevronLeft, Info, HelpCircle, CheckCircle2, AlertTriangle, BookOpen, FileText, Check } from 'lucide-react-native';
 import { useAppTheme } from '../context/AppContext';
 import { theme as baseTheme } from '../theme/theme';
@@ -20,6 +20,18 @@ export const DocumentsGuideScreen = () => {
   const [selectedDoc, setSelectedDoc] = useState<DocumentGuide | null>(null);
 
   const progress = state.documents_progress || {};
+
+  // Intercept Android hardware back button when detail view is open
+  useEffect(() => {
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (selectedDoc) {
+        setSelectedDoc(null);
+        return true; // Consumed — don't bubble up to App.tsx
+      }
+      return false; // Let App.tsx handle it normally
+    });
+    return () => handler.remove();
+  }, [selectedDoc]);
 
   const handleToggleStatus = async (id: string) => {
     const currentStatus = progress[id] || 'missing';

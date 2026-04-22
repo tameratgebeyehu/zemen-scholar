@@ -13,12 +13,14 @@ const { width } = Dimensions.get('window');
 
 interface Props {
   onNavigate?: (route: string) => void;
+  initialTab?: 'application' | 'visa';
 }
 
-export const VisaScreen = ({ onNavigate }: Props) => {
+export const VisaScreen = ({ onNavigate, initialTab = 'application' }: Props) => {
   const { state, updateApplication, updateVisa } = useAppContext();
   const theme = useAppTheme();
-  const [activeTab, setActiveTab] = useState<'application' | 'visa'>('application');
+  const [activeTab, setActiveTab] = useState<'application' | 'visa'>(initialTab);
+  const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
 
   const { user, application_progress, visa_progress } = state;
 
@@ -64,7 +66,7 @@ export const VisaScreen = ({ onNavigate }: Props) => {
         <View style={[styles.switcherContainer, { backgroundColor: theme.colors.card }]}>
           <PremiumTouchable 
             style={[styles.switcherTab, activeTab === 'application' && { backgroundColor: theme.colors.primary }]}
-            onPress={() => setActiveTab('application')}
+            onPress={() => { setActiveTab('application'); setExpandedStepId(null); }}
           >
             <GraduationCap color={activeTab === 'application' ? '#FFF' : theme.colors.textSecondary} size={18} />
             <Text style={[styles.switcherText, { color: activeTab === 'application' ? '#FFF' : theme.colors.textSecondary }]}>
@@ -73,7 +75,7 @@ export const VisaScreen = ({ onNavigate }: Props) => {
           </PremiumTouchable>
           <PremiumTouchable 
             style={[styles.switcherTab, activeTab === 'visa' && { backgroundColor: theme.colors.primary }]}
-            onPress={() => setActiveTab('visa')}
+            onPress={() => { setActiveTab('visa'); setExpandedStepId(null); }}
           >
             <Landmark color={activeTab === 'visa' ? '#FFF' : theme.colors.textSecondary} size={18} />
             <Text style={[styles.switcherText, { color: activeTab === 'visa' ? '#FFF' : theme.colors.textSecondary }]}>
@@ -128,6 +130,8 @@ export const VisaScreen = ({ onNavigate }: Props) => {
               step={step}
               status={currentProgress[step.id] || 'not_started'}
               isLast={idx === currentSteps.length - 1}
+              isExpanded={expandedStepId === step.id}
+              onExpand={() => setExpandedStepId(expandedStepId === step.id ? null : step.id)}
               onUpdateStatus={(id, status) => handleUpdateStatus(activeTab, id, status)}
             />
           ))}

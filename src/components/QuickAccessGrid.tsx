@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Compass, ClipboardCheck, School, IdCard, Star, Book } from 'lucide-react-native';
 import { useAppTheme } from '../context/AppContext';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface Props {
   onPressItem: (route: string) => void;
@@ -9,51 +10,97 @@ interface Props {
 
 export const QuickAccessGrid = ({ onPressItem }: Props) => {
   const theme = useAppTheme();
+  const { isTablet } = useResponsive();
+
+  const itemWidth = isTablet ? '31.5%' : '48.5%';
+  const iconSize = isTablet ? 26 : 22;
+  const padding = isTablet ? 18 : 12;
 
   return (
     <View style={styles.gridContainer}>
-      <TouchableOpacity style={[styles.gridItem, { backgroundColor: theme.colors.card }]} activeOpacity={0.7} onPress={() => onPressItem('roadmap')}>
-        <View style={[styles.iconWrapper, { backgroundColor: `${theme.colors.primary}10` }]}>
-          <Compass color={theme.colors.primary} size={28} />
+      <TouchableOpacity 
+        style={[
+          styles.gridItem, 
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border, width: itemWidth, padding }
+        ]} 
+        activeOpacity={0.7} 
+        onPress={() => onPressItem('roadmap')}
+      >
+        <View style={[styles.iconWrapper, isTablet && styles.iconWrapperTablet, { backgroundColor: `${theme.colors.primary}10` }]}>
+          <Compass color={theme.colors.primary} size={iconSize} />
         </View>
-        <Text style={[styles.gridText, { color: theme.colors.text }]}>Roadmap</Text>
+        <Text style={[styles.gridText, { color: theme.colors.text }, isTablet && { fontSize: 15 }]} numberOfLines={1}>Roadmap</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.gridItem, { backgroundColor: theme.colors.card }]} activeOpacity={0.7} onPress={() => onPressItem('documents')}>
-        <View style={[styles.iconWrapper, { backgroundColor: `${theme.colors.warning}10` }]}>
-          <ClipboardCheck color={theme.colors.warning} size={28} />
+      <TouchableOpacity 
+        style={[
+          styles.gridItem, 
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border, width: itemWidth, padding }
+        ]} 
+        activeOpacity={0.7} 
+        onPress={() => onPressItem('documents')}
+      >
+        <View style={[styles.iconWrapper, isTablet && styles.iconWrapperTablet, { backgroundColor: `${theme.colors.warning}10` }]}>
+          <ClipboardCheck color={theme.colors.warning} size={iconSize} />
         </View>
-        <Text style={[styles.gridText, { color: theme.colors.text }]}>Documents</Text>
+        <Text style={[styles.gridText, { color: theme.colors.text }, isTablet && { fontSize: 15 }]} numberOfLines={1}>Documents</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.gridItem, { backgroundColor: theme.colors.card }]} activeOpacity={0.7} onPress={() => onPressItem('universities')}>
-        <View style={[styles.iconWrapper, { backgroundColor: `${theme.colors.success}10` }]}>
-          <School color={theme.colors.success} size={28} />
+      <TouchableOpacity 
+        style={[
+          styles.gridItem, 
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border, width: itemWidth, padding }
+        ]} 
+        activeOpacity={0.7} 
+        onPress={() => onPressItem('universities')}
+      >
+        <View style={[styles.iconWrapper, isTablet && styles.iconWrapperTablet, { backgroundColor: `${theme.colors.success}10` }]}>
+          <School color={theme.colors.success} size={iconSize} />
         </View>
-        <Text style={[styles.gridText, { color: theme.colors.text }]}>Universities</Text>
+        <Text style={[styles.gridText, { color: theme.colors.text }, isTablet && { fontSize: 15 }]} numberOfLines={1}>Universities</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.gridItem, { backgroundColor: theme.colors.card }]} activeOpacity={0.7} onPress={() => onPressItem('visa')}>
-        <View style={[styles.iconWrapper, { backgroundColor: `#8b5cf610` }]}>
-          <IdCard color="#8b5cf6" size={28} />
+      <TouchableOpacity 
+        style={[
+          styles.gridItem, 
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border, width: itemWidth, padding }
+        ]} 
+        activeOpacity={0.7} 
+        onPress={() => onPressItem('visa')}
+      >
+        <View style={[styles.iconWrapper, isTablet && styles.iconWrapperTablet, { backgroundColor: `#8b5cf610` }]}>
+          <IdCard color="#8b5cf6" size={iconSize} />
         </View>
-        <Text style={[styles.gridText, { color: theme.colors.text }]}>Visa Guide</Text>
+        <Text style={[styles.gridText, { color: theme.colors.text }, isTablet && { fontSize: 15 }]} numberOfLines={1}>Visa Guide</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.gridItem, { backgroundColor: theme.colors.card }]} activeOpacity={0.7} onPress={() => onPressItem('extracurricular')}>
-        <View style={[styles.iconWrapper, { backgroundColor: `${theme.colors.info}10` }]}>
-          <Star color={theme.colors.info} size={28} />
+      <TouchableOpacity 
+        style={[
+          styles.gridItem, 
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border, width: itemWidth, padding }
+        ]} 
+        activeOpacity={0.7} 
+        onPress={() => onPressItem('extracurricular')}
+      >
+        <View style={[styles.iconWrapper, isTablet && styles.iconWrapperTablet, { backgroundColor: `${theme.colors.info}10` }]}>
+          <Star color={theme.colors.info} size={iconSize} />
         </View>
-        <Text style={[styles.gridText, { color: theme.colors.text }]}>Activities</Text>
+        <Text style={[styles.gridText, { color: theme.colors.text }, isTablet && { fontSize: 15 }]} numberOfLines={1}>Activities</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.gridItem, { backgroundColor: theme.colors.card }]} activeOpacity={0.7} onPress={() => onPressItem('words_to_know')}>
-        <View style={[styles.iconWrapper, { backgroundColor: `#ec489910` }]}>
-          <Book color="#ec4899" size={28} />
+      <TouchableOpacity 
+        style={[
+          styles.gridItem, 
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border, width: itemWidth, padding }
+        ]} 
+        activeOpacity={0.7} 
+        onPress={() => onPressItem('words_to_know')}
+      >
+        <View style={[styles.iconWrapper, isTablet && styles.iconWrapperTablet, { backgroundColor: `#ec489910` }]}>
+          <Book color="#ec4899" size={iconSize} />
         </View>
-        <Text style={[styles.gridText, { color: theme.colors.text }]}>Glossary</Text>
+        <Text style={[styles.gridText, { color: theme.colors.text }, isTablet && { fontSize: 15 }]} numberOfLines={1}>Glossary</Text>
       </TouchableOpacity>
-
     </View>
   );
 };
@@ -67,30 +114,35 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   gridItem: {
-    width: '48%',
-    aspectRatio: 1,
-    padding: 20,
-    borderRadius: 24,
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1.5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
     elevation: 2,
   },
   iconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 10,
+  },
+  iconWrapperTablet: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    marginRight: 14,
   },
   gridText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '800',
-    letterSpacing: -0.3,
-    marginTop: 12,
+    letterSpacing: -0.2,
+    flex: 1,
   },
 });

@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, UIManager, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform } from 'react-native';
 import { ChevronDown, ChevronUp, Lock, CheckCircle2, CircleDot } from 'lucide-react-native';
 import { theme } from '../theme/theme';
 import { RoadmapStep } from '../types/roadmap';
 import { SubTaskItem } from './SubTaskItem';
 import { Card } from './Card';
 
-// Enable layout animation for Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// RoadmapStepCard component logic follows...
 
 interface Props {
   step: RoadmapStep;

@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform } from 'react-native';
 import { ChevronDown, ChevronUp, CheckCircle2, CircleDot, CircleDashed, Lightbulb, AlertTriangle } from 'lucide-react-native';
 import { theme } from '../theme/theme';
 import { StepStatus } from '../storage/storageService';
 import { Card } from './Card';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// ProcessStepCard component logic follows...
 
 export interface OfflineStep {
   id: string;

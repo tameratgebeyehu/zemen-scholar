@@ -113,6 +113,19 @@ export const GPACalculatorScreen = ({ onBack }: Props) => {
     ));
   };
 
+  const scrollToInput = (index: number) => {
+    // Approx height of elements above the first input
+    const initialOffset = 260; 
+    const itemHeight = 68; // Height of each inputRow + marginBottom
+    
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: initialOffset + (index * itemHeight),
+        animated: true
+      });
+    }, 100);
+  };
+
   const feedback = getGPAFeedback(parseFloat(overallGPA));
 
   return (
@@ -177,6 +190,7 @@ export const GPACalculatorScreen = ({ onBack }: Props) => {
                   placeholderTextColor={theme.colors.textSecondary + '80'}
                   value={subject.name}
                   onChangeText={(val) => updateSubject(subject.id, 'name', val)}
+                  onFocus={() => scrollToInput(index)}
                 />
                 <View style={styles.scoreInputWrapper}>
                   <TextInput
@@ -184,6 +198,7 @@ export const GPACalculatorScreen = ({ onBack }: Props) => {
                     placeholder="0"
                     placeholderTextColor={theme.colors.textSecondary + '80'}
                     keyboardType="numeric"
+                    onFocus={() => scrollToInput(index)}
                     maxLength={3}
                     value={subject.percentage}
                     onChangeText={(val) => {

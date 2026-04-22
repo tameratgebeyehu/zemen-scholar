@@ -1,151 +1,274 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TextInput, 
-  TouchableOpacity, 
-  Modal, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Modal,
   Pressable,
   Dimensions,
   Platform,
   Animated,
   PanResponder,
-  Share
+  Share,
+  SectionList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  ChevronLeft, 
-  Search, 
-  X, 
-  BookOpen, 
-  Layers, 
+import {
+  ChevronLeft,
+  Search,
+  X,
+  BookOpen,
+  Layers,
   SlidersHorizontal,
-  ChevronRight,
   Copy,
   Share2,
-  Sparkles
+  Sparkles,
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { useAppTheme } from '../context/AppContext';
+import { useResponsive } from '../hooks/useResponsive';
 import { theme as baseTheme } from '../theme/theme';
 import { GLOSSARY_DATA, GlossaryItem } from '../constants/appData';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const ITEM_HEIGHT = 64;
+const SECTION_HEADER_HEIGHT = 44;
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const CATEGORIES = ['All', 'Basics', 'Application', 'Academics', 'Financial', 'Visa', 'Strategy', 'Writing', 'Career', 'Metrics', 'Risks', 'Safety'];
 
 interface Props {
   onBack: () => void;
 }
 
-const CATEGORIES = ["All", "Basics", "Application", "Academics", "Financial", "Visa", "Strategy", "Writing", "Career", "Metrics", "Risks", "Safety"];
-
-// --- Optimized List Item ---
-const TermItem = React.memo(({ item, onPress }: { item: GlossaryItem, onPress: (item: GlossaryItem) => void }) => {
+// ─── Section Header ───────────────────────────────────────────────────────────
+const SectionHeader = React.memo(({ letter }: { letter: string }) => {
   const theme = useAppTheme();
-  
   return (
-    <TouchableOpacity 
-      style={[styles.termItem, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}
-      onPress={() => onPress(item)}
-      activeOpacity={0.6}
-    >
-      <View style={styles.termItemLeft}>
-        <Text style={[styles.termItemTitle, { color: theme.colors.text }]}>{item.term}</Text>
+    <View style={[shStyles.row, { backgroundColor: theme.colors.background }]}>
+      <View style={[shStyles.badge, { backgroundColor: theme.colors.primary }]}>
+        <Text style={shStyles.letter}>{letter}</Text>
       </View>
-      <View style={styles.termItemRight}>
-        <ChevronRight size={20} color={theme.colors.textSecondary + '60'} />
-      </View>
-    </TouchableOpacity>
+      <View style={[shStyles.line, { backgroundColor: theme.colors.border }]} />
+    </View>
   );
 });
 
+const shStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: SECTION_HEADER_HEIGHT,
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  badge: { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  letter: { fontSize: 13, fontWeight: '900', color: '#FFF' },
+  line: { flex: 1, height: 1 },
+});
+
+// ─── Term Item ────────────────────────────────────────────────────────────────
+const TermItem = React.memo(
+  ({ item, onPress }: { item: GlossaryItem; onPress: (i: GlossaryItem) => void }) => {
+    const theme = useAppTheme();
+    return (
+      <TouchableOpacity
+        style={[styles.termItem, { borderBottomColor: theme.colors.border + '50' }]}
+        onPress={() => onPress(item)}
+        activeOpacity={0.45}
+      >
+        <View style={styles.termRow}>
+          <View style={styles.termLeft}>
+            <Text style={[styles.termTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              {item.term}
+            </Text>
+            <Text style={[styles.termSub, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+              {item.amharic ? item.amharic : item.definition.substring(0, 48) + '…'}
+            </Text>
+          </View>
+          <View style={[styles.catPill, { backgroundColor: theme.colors.primary + '14' }]}>
+            <Text style={[styles.catPillText, { color: theme.colors.primary }]}>{item.category}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  },
+  (prev, next) => prev.item.term === next.item.term && prev.item.category === next.item.category
+);
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export const WordsToKnowScreen = ({ onBack }: Props) => {
   const theme = useAppTheme();
+  const { isTablet } = useResponsive();
+
+  // State
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedTerm, setSelectedTerm] = useState<GlossaryItem | null>(null);
   const [isDetailVisible, setIsDetailVisible] = useState(false);
   const [isFilterVisible, setIsFilterVisible] = useState(false);
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [floatingLetter, setFloatingLetter] = useState<string | null>(null);
 
-  // Animation values
-  const panY = useRef(new Animated.Value(0)).current;
-  const detailScale = useRef(new Animated.Value(0.95)).current;
+  // Refs
+  const sectionListRef = useRef<SectionList>(null);
+  const sidebarRef = useRef<View>(null);
+  const sidebarTop = useRef(0);
+  const sidebarHeight = useRef(0);
+  const lastScrolledLetter = useRef('');
+  const searchInputRef = useRef<TextInput>(null);
 
-  // Handle Swipe Down Gesture
-  const panResponder = useRef(
+  // Animations
+  const sheetPanY = useRef(new Animated.Value(0)).current;
+  const sheetScale = useRef(new Animated.Value(0.95)).current;
+  const searchBarWidth = useRef(new Animated.Value(0)).current;
+  const searchBarOpacity = useRef(new Animated.Value(0)).current;
+  const headerTitleOpacity = useRef(new Animated.Value(1)).current;
+
+  // Open search bar with animation
+  const openSearch = useCallback(() => {
+    setIsSearchVisible(true);
+    Animated.parallel([
+      Animated.timing(searchBarWidth, { toValue: 1, duration: 280, useNativeDriver: false }),
+      Animated.timing(searchBarOpacity, { toValue: 1, duration: 300, useNativeDriver: false }),
+      Animated.timing(headerTitleOpacity, { toValue: 0, duration: 200, useNativeDriver: false }),
+    ]).start(() => {
+      searchInputRef.current?.focus();
+    });
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    searchInputRef.current?.blur();
+    Animated.parallel([
+      Animated.timing(searchBarWidth, { toValue: 0, duration: 240, useNativeDriver: false }),
+      Animated.timing(searchBarOpacity, { toValue: 0, duration: 200, useNativeDriver: false }),
+      Animated.timing(headerTitleOpacity, { toValue: 1, duration: 280, useNativeDriver: false }),
+    ]).start(() => {
+      setIsSearchVisible(false);
+      setSearchQuery('');
+    });
+  }, []);
+
+  // Sheet animations
+  const closeSheets = useCallback(() => {
+    Animated.timing(sheetPanY, { toValue: SCREEN_HEIGHT, duration: 240, useNativeDriver: false }).start(() => {
+      setIsDetailVisible(false);
+      setIsFilterVisible(false);
+    });
+  }, []);
+
+  const sheetPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => gestureState.dy > 5,
-      onPanResponderMove: Animated.event([null, { dy: panY }], { useNativeDriver: false }),
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 150 || gestureState.vy > 0.5) {
-          closeSheets();
-        } else {
-          Animated.spring(panY, {
-            toValue: 0,
-            useNativeDriver: false,
-          }).start();
-        }
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
+      onPanResponderMove: Animated.event([null, { dy: sheetPanY }], { useNativeDriver: false }),
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 100 || gs.vy > 0.5) closeSheets();
+        else Animated.spring(sheetPanY, { toValue: 0, useNativeDriver: false }).start();
       },
     })
   ).current;
 
-  const closeSheets = () => {
-    Animated.timing(panY, {
-      toValue: SCREEN_HEIGHT,
-      duration: 200, // Slightly faster for responsiveness
-      useNativeDriver: false,
-    }).start(() => {
-      setIsDetailVisible(false);
-      setIsFilterVisible(false);
-    });
-  };
-
   useEffect(() => {
     if (isDetailVisible || isFilterVisible) {
-      panY.setValue(0);
-      detailScale.setValue(0.95);
+      sheetPanY.setValue(0);
+      sheetScale.setValue(0.95);
       Animated.parallel([
-        Animated.spring(panY, { 
-          toValue: 0, 
-          useNativeDriver: false,
-          tension: 60,
-          friction: 10
-        }),
-        Animated.spring(detailScale, { 
-          toValue: 1, 
-          useNativeDriver: false,
-          tension: 60,
-          friction: 10
-        })
+        Animated.spring(sheetPanY, { toValue: 0, useNativeDriver: false, tension: 70, friction: 12 }),
+        Animated.spring(sheetScale, { toValue: 1, useNativeDriver: false, tension: 70, friction: 12 }),
       ]).start();
     }
   }, [isDetailVisible, isFilterVisible]);
 
+  // Debounce search so filtering/sorting only fires 300ms after typing stops
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // ── Data ──────────────────────────────────────────────────────────────────
   const filteredData = useMemo(() => {
     return GLOSSARY_DATA.filter(item => {
-      const matchesSearch = item.term.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           item.definition.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           (item.amharic && item.amharic.includes(searchQuery));
-      
-      const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
-      
-      return matchesSearch && matchesCategory;
+      const matchSearch = !debouncedQuery ||
+        item.term.toLowerCase().includes(debouncedQuery) ||
+        item.definition.toLowerCase().includes(debouncedQuery) ||
+        (item.amharic && item.amharic.toLowerCase().includes(debouncedQuery));
+      const matchCat = activeCategory === 'All' || item.category === activeCategory;
+      return matchSearch && matchCat;
     });
-  }, [searchQuery, activeCategory]);
+  }, [debouncedQuery, activeCategory]);
+
+  const sections = useMemo(() => {
+    const sorted = [...filteredData].sort((a, b) => a.term.localeCompare(b.term));
+    const grouped: Record<string, GlossaryItem[]> = {};
+    for (const item of sorted) {
+      const letter = item.term[0].toUpperCase();
+      if (!grouped[letter]) grouped[letter] = [];
+      grouped[letter].push(item);
+    }
+    return Object.keys(grouped).sort().map(letter => ({ title: letter, data: grouped[letter] }));
+  }, [filteredData]);
+
+  // Active letters set
+  const activeLetters = useMemo(() => new Set(sections.map(s => s.title)), [sections]);
 
   const relatedTerms = useMemo(() => {
     if (!selectedTerm) return [];
-    return GLOSSARY_DATA
-      .filter(item => item.category === selectedTerm.category && item.term !== selectedTerm.term)
-      .slice(0, 4);
+    return GLOSSARY_DATA.filter(i => i.category === selectedTerm.category && i.term !== selectedTerm.term).slice(0, 4);
   }, [selectedTerm]);
 
+  // ── Handlers ─────────────────────────────────────────────────────────────
   const handleShowDetail = useCallback((item: GlossaryItem) => {
     setSelectedTerm(item);
     setIsDetailVisible(true);
   }, []);
+
+  // ── Stable render callbacks (prevent new refs causing full re-renders) ────
+  
+  // Mathematical GPS mapping for instant jumping (0ms lag)
+  const getItemLayout = useCallback((data: any, flatIndex: number) => {
+    let offset = 0;
+    let currentIndex = 0;
+
+    for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+      const section = sections[sIdx];
+      // Section header
+      if (currentIndex === flatIndex) {
+        return { length: SECTION_HEADER_HEIGHT, offset, index: flatIndex };
+      }
+      offset += SECTION_HEADER_HEIGHT;
+      currentIndex++;
+
+      // Items in this section
+      const itemsLength = section.data.length;
+      if (flatIndex < currentIndex + itemsLength) {
+        const itemIdx = flatIndex - currentIndex;
+        return {
+          length: ITEM_HEIGHT,
+          offset: offset + itemIdx * ITEM_HEIGHT,
+          index: flatIndex,
+        };
+      }
+      offset += itemsLength * ITEM_HEIGHT;
+      currentIndex += itemsLength;
+
+      // Section footer (none used)
+    }
+    return { length: 0, offset, index: flatIndex };
+  }, [sections]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: GlossaryItem }) => <TermItem item={item} onPress={handleShowDetail} />,
+    [handleShowDetail]
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section: { title } }: any) => <SectionHeader letter={title} />,
+    []
+  );
 
   const handleCopy = async (text: string) => {
     await Clipboard.setStringAsync(text);
@@ -154,249 +277,365 @@ export const WordsToKnowScreen = ({ onBack }: Props) => {
   const handleShare = async (item: GlossaryItem) => {
     try {
       await Share.share({
-        message: `Zemen Scholar Dictionary: ${item.term}\n\nDefinition: ${item.definition}${item.amharic ? `\n\nAmharic: ${item.amharic}` : ''}`,
+        message: `📚 Zemen Scholar Dictionary\n\n${item.term}${item.amharic ? ` (${item.amharic})` : ''}\n\n${item.definition}`,
         title: item.term,
       });
-    } catch (error) {
-      console.error(error);
-    }
+    } catch { }
   };
 
+  // ── A-Z Sidebar ─────────────────────────────────────────────────────────
+  const getLetterFromY = useCallback((pageY: number) => {
+    // Safety check if measurement hasn't happened
+    if (sidebarHeight.current <= 0) return ALPHABET[0];
+    
+    const rel = pageY - sidebarTop.current;
+    const letterH = sidebarHeight.current / ALPHABET.length;
+    const idx = Math.max(0, Math.min(ALPHABET.length - 1, Math.floor(rel / letterH)));
+    return ALPHABET[idx];
+  }, []);
+
+  const scrollToLetter = useCallback((targetLetter: string) => {
+    // 1. Find the closest available section (Smart Snapping)
+    let letterToJump: string | null = null;
+    
+    if (activeLetters.has(targetLetter)) {
+      letterToJump = targetLetter;
+    } else {
+      const targetIdx = ALPHABET.indexOf(targetLetter);
+      const nextBest = ALPHABET.slice(targetIdx).find(char => activeLetters.has(char));
+      if (nextBest) {
+        letterToJump = nextBest;
+      } else {
+        const prevBest = ALPHABET.slice(0, targetIdx).reverse().find(char => activeLetters.has(char));
+        if (prevBest) letterToJump = prevBest;
+      }
+    }
+
+    if (!letterToJump || lastScrolledLetter.current === letterToJump) return;
+    lastScrolledLetter.current = letterToJump;
+
+    // Trigger haptic feedback for premium feel
+    try {
+      Haptics.selectionAsync();
+    } catch (e) { /* Fallback for missing package */ }
+
+    const sIdx = sections.findIndex(s => s.title === letterToJump);
+    if (sIdx < 0 || !sectionListRef.current) return;
+
+    // Direct scroll for maximum speed on drag
+    sectionListRef.current?.scrollToLocation({
+      sectionIndex: sIdx,
+      itemIndex: 0,
+      viewOffset: 0,
+      animated: false,
+    });
+  }, [sections, activeLetters]);
+
+  const sidebarPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        // Bulletproof Calibration: Re-measure on every start to handle UI shifts
+        sidebarRef.current?.measureInWindow((_x, py, _w, h) => {
+          sidebarTop.current = py;
+          sidebarHeight.current = h;
+          
+          lastScrolledLetter.current = '';
+          const letter = getLetterFromY(e.nativeEvent.pageY);
+          setFloatingLetter(letter);
+          scrollToLetter(letter);
+        });
+      },
+      onPanResponderMove: (e) => {
+        const letter = getLetterFromY(e.nativeEvent.pageY);
+        setFloatingLetter(letter);
+        scrollToLetter(letter);
+      },
+      onPanResponderRelease: () => {
+        lastScrolledLetter.current = '';
+        setTimeout(() => setFloatingLetter(null), 300);
+      },
+      onPanResponderTerminate: () => {
+        setFloatingLetter(null);
+      }
+    })
+  ).current;
+
+  const onSidebarLayout = useCallback(() => {
+    sidebarRef.current?.measureInWindow((_x, py, _w, h) => {
+      sidebarTop.current = py;
+      sidebarHeight.current = h;
+    });
+  }, []);
+
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
-        <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.backBtn} activeOpacity={0.7} onPress={onBack}>
-            <ChevronLeft color={theme.colors.text} size={28} />
-          </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Dictionary</Text>
-            <Text style={[styles.headerSubtitle, { color: theme.colors.textSecondary }]}>Tap terms to see details</Text>
-          </View>
-        </View>
 
-        {/* Search & Filter Row */}
-        <View style={styles.searchRow}>
-          <View style={[styles.searchBox, { backgroundColor: theme.colors.border + '50' }]}>
-            <Search color={theme.colors.textSecondary} size={18} />
-            <TextInput
-              style={[styles.searchInput, { color: theme.colors.text }]}
-              placeholder="Search concepts..."
-              placeholderTextColor={theme.colors.textSecondary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <X color={theme.colors.textSecondary} size={18} />
-              </TouchableOpacity>
-            )}
+      {/* ── Header ── */}
+      <View style={[styles.header, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
+
+        {/* Normal header row */}
+        <Animated.View style={[styles.headerNormal, { opacity: headerTitleOpacity }]}>
+          <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.7}>
+            <ChevronLeft color={theme.colors.text} size={26} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Dictionary</Text>
+            <Text style={[styles.headerCount, { color: theme.colors.textSecondary }]}>
+              {filteredData.length} terms · A–Z
+            </Text>
           </View>
-          <TouchableOpacity 
-            style={[
-              styles.filterBtn, 
-              { backgroundColor: theme.colors.primary },
-              activeCategory !== 'All' && styles.filterBtnActive
-            ]}
+          <TouchableOpacity onPress={openSearch} style={[styles.iconBtn, { backgroundColor: theme.colors.border + '40' }]} activeOpacity={0.7}>
+            <Search color={theme.colors.text} size={18} strokeWidth={2.5} />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => setIsFilterVisible(true)}
+            style={[styles.iconBtn, { backgroundColor: activeCategory !== 'All' ? theme.colors.primary : theme.colors.border + '40' }]}
+            activeOpacity={0.7}
           >
-            <SlidersHorizontal color="#FFF" size={20} />
+            <SlidersHorizontal color={activeCategory !== 'All' ? '#FFF' : theme.colors.text} size={18} />
             {activeCategory !== 'All' && <View style={styles.filterDot} />}
           </TouchableOpacity>
-        </View>
+        </Animated.View>
+
+        {/* Expanded search row */}
+        {isSearchVisible && (
+          <Animated.View style={[styles.searchRow, { opacity: searchBarOpacity }]}>
+            <TouchableOpacity onPress={closeSearch} style={styles.backBtn} activeOpacity={0.7}>
+              <ChevronLeft color={theme.colors.text} size={26} />
+            </TouchableOpacity>
+            <View style={[styles.searchBox, { backgroundColor: theme.colors.border + '40', borderColor: theme.colors.border }]}>
+              <Search color={theme.colors.textSecondary} size={16} strokeWidth={2.5} />
+              <TextInput
+                ref={searchInputRef}
+                style={[styles.searchInput, { color: theme.colors.text }]}
+                placeholder="Search words, definitions..."
+                placeholderTextColor={theme.colors.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <View style={[styles.clearBtn, { backgroundColor: theme.colors.textSecondary + '25' }]}>
+                    <X color={theme.colors.textSecondary} size={12} strokeWidth={3} />
+                  </View>
+                </TouchableOpacity>
+              )}
+            </View>
+          </Animated.View>
+        )}
+
+        {/* Active filter chip */}
+        {activeCategory !== 'All' && (
+          <View style={[styles.activeCatChip, { backgroundColor: theme.colors.primary + '15' }]}>
+            <Text style={[styles.activeCatText, { color: theme.colors.primary }]}>
+              {activeCategory}
+            </Text>
+            <TouchableOpacity onPress={() => setActiveCategory('All')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X color={theme.colors.primary} size={12} strokeWidth={3} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      {/* List */}
-      <FlatList
-        data={filteredData}
-        keyExtractor={(item) => `${item.term}-${item.category}`}
-        renderItem={({ item }) => <TermItem item={item} onPress={handleShowDetail} />}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={15}
-        maxToRenderPerBatch={20}
-        windowSize={10}
-        removeClippedSubviews={true}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <BookOpen size={48} color="#CCC" />
-            <Text style={styles.emptyText}>Nothing found</Text>
-          </View>
-        }
-      />
+      {/* ── Body (list + sidebar row) ── */}
+      <View style={styles.body}>
+        <SectionList
+          ref={sectionListRef}
+          style={{ flex: 1 }}
+          sections={sections}
+          keyExtractor={(item, index) => `${item.term}_${index}`}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          stickySectionHeadersEnabled={false}
+          removeClippedSubviews={false}
+          getItemLayout={getItemLayout}
+          // Responsive virtualization: Lighter on mobile to prevent glitches, heavy on tablet for speed
+          initialNumToRender={isTablet ? 50 : 20}
+          maxToRenderPerBatch={isTablet ? 20 : 10}
+          updateCellsBatchingPeriod={isTablet ? 50 : 100}
+          windowSize={isTablet ? 10 : 5}
+          onScrollToIndexFailed={(info) => {
+            try {
+              sectionListRef.current?.scrollToLocation({
+                sectionIndex: info.index,
+                itemIndex: 0,
+                viewOffset: 0,
+                animated: false,
+              });
+            } catch (err) {}
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <BookOpen size={52} color={theme.colors.border} />
+              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>Nothing found</Text>
+              <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary }]}>
+                Try a different word or category
+              </Text>
+            </View>
+          }
+        />
 
-      {/* --- Detail Bottom Sheet (Modal) --- */}
-      <Modal
-        visible={isDetailVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsDetailVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.dismissOverlay} onPress={() => setIsDetailVisible(false)} />
-          <Animated.View 
-            style={[
-              styles.detailSheet, 
-              { 
-                backgroundColor: theme.colors.card,
-                transform: [{ translateY: panY }, { scale: detailScale }]
-              }
-            ]}
-            {...panResponder.panHandlers}
+        {/* A-Z Sidebar — vertical column beside the list */}
+        {!isSearchVisible && (
+          <View
+            ref={sidebarRef}
+            style={[styles.sidebar, { backgroundColor: theme.colors.card + 'E8' }]}
+            onLayout={onSidebarLayout}
+            {...sidebarPanResponder.panHandlers}
+            // More generous hitSlop on mobile so it's easier to grab
+            hitSlop={{ left: isTablet ? 10 : 25, right: 10, top: 0, bottom: 0 }}
           >
-            <View style={styles.sheetHandle} />
+            {ALPHABET.map(letter => (
+              <View key={letter} style={styles.sidebarRow}>
+                <Text style={[
+                  styles.sidebarLetter,
+                  { color: activeLetters.has(letter) ? theme.colors.primary : theme.colors.border },
+                  activeLetters.has(letter) && styles.sidebarLetterActive,
+                ]}>
+                  {letter}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Floating letter bubble — absolute inside body */}
+        {floatingLetter && (
+          <View
+            style={[styles.bubble, { backgroundColor: theme.colors.primary }]}
+            pointerEvents="none"
+          >
+            <Text style={styles.bubbleLetter}>{floatingLetter}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* ── Detail Sheet ── */}
+      <Modal visible={isDetailVisible} transparent animationType="fade" onRequestClose={() => setIsDetailVisible(false)}>
+        <View style={styles.overlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setIsDetailVisible(false)} />
+          <Animated.View
+            style={[styles.detailSheet, { backgroundColor: theme.colors.card, transform: [{ translateY: sheetPanY }, { scale: sheetScale }] }]}
+            {...sheetPanResponder.panHandlers}
+          >
+            <View style={styles.handle} />
             {selectedTerm && (
-              <View style={styles.sheetContent}>
-                <View style={styles.sheetHeader}>
-                  <View style={{ flex: 1, paddingRight: 16 }}>
-                    <Text style={[styles.sheetTerm, { color: theme.colors.text }]}>
-                      {selectedTerm.term}
-                    </Text>
+              <View style={styles.sheetBody}>
+                <View style={styles.sheetTopRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sheetTerm, { color: theme.colors.text }]}>{selectedTerm.term}</Text>
+                    <View style={[styles.sheetCatBadge, { backgroundColor: theme.colors.primary + '15' }]}>
+                      <Text style={[styles.sheetCatText, { color: theme.colors.primary }]}>{selectedTerm.category}</Text>
+                    </View>
                   </View>
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity 
-                      style={styles.actionBtnIcon}
-                      onPress={() => handleShare(selectedTerm)}
-                    >
-                      <Share2 size={20} color={theme.colors.textSecondary} />
+                  <View style={styles.sheetActions}>
+                    <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.colors.border + '40' }]} onPress={() => handleShare(selectedTerm)}>
+                      <Share2 size={17} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.actionBtnIcon}
-                      onPress={() => handleCopy(selectedTerm.definition)}
-                    >
-                      <Copy size={20} color={theme.colors.textSecondary} />
+                    <TouchableOpacity style={[styles.actionBtn, { backgroundColor: theme.colors.border + '40' }]} onPress={() => handleCopy(selectedTerm.definition)}>
+                      <Copy size={17} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
                   </View>
                 </View>
 
                 {selectedTerm.amharic && (
                   <View style={[styles.amharicCard, { backgroundColor: theme.colors.primary + '08', borderColor: theme.colors.primary + '20' }]}>
-                    <Text style={[styles.amharicCardLabel, { color: theme.colors.primary }]}>አማርኛ / Amharic</Text>
-                    <Text style={[styles.amharicCardText, { color: theme.colors.text }]}>
-                      {selectedTerm.amharic}
-                    </Text>
+                    <Text style={[styles.amharicLabel, { color: theme.colors.primary }]}>አማርኛ</Text>
+                    <Text style={[styles.amharicText, { color: theme.colors.text }]}>{selectedTerm.amharic}</Text>
                   </View>
                 )}
 
-                <View style={styles.definitionBox}>
-                  {(() => {
-                    const parts = selectedTerm.definition.split(/Tip[ :]+/);
-                    const defText = parts[0].trim();
-                    const tipText = parts[1] ? parts[1].trim() : null;
-                    
-                    return (
-                      <>
-                        <Text style={[styles.sheetDefinition, { color: theme.colors.text }]}>
-                          {defText}
-                        </Text>
-
-                        {tipText && (
-                          <View style={styles.proTipCard}>
-                            <View style={styles.proTipHeader}>
-                              <Sparkles size={16} color="#E89F00" />
-                              <Text style={styles.proTipTitle}>MENTOR TIP</Text>
-                            </View>
-                            <Text style={styles.proTipText}>{tipText}</Text>
+                {(() => {
+                  const parts = selectedTerm.definition.split(/Tip[ :]+/);
+                  const def = parts[0].trim();
+                  const tip = parts[1]?.trim();
+                  return (
+                    <>
+                      <Text style={[styles.defText, { color: theme.colors.text }]}>{def}</Text>
+                      {tip && (
+                        <View style={styles.tipCard}>
+                          <View style={styles.tipRow}>
+                            <Sparkles size={14} color="#D48800" />
+                            <Text style={styles.tipTitle}>MENTOR TIP</Text>
                           </View>
-                        )}
-                      </>
-                    );
-                  })()}
-                </View>
+                          <Text style={styles.tipText}>{tip}</Text>
+                        </View>
+                      )}
+                    </>
+                  );
+                })()}
 
-                {/* Related Terms */}
                 {relatedTerms.length > 0 && (
                   <View style={styles.relatedSection}>
-                    <View style={styles.sectionHeader}>
-                      <Sparkles size={16} color={theme.colors.primary} />
-                      <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>RELATED PHRASES</Text>
-                    </View>
-                    <View style={styles.relatedGrid}>
+                    <Text style={[styles.relatedLabel, { color: theme.colors.textSecondary }]}>RELATED TERMS</Text>
+                    <View style={styles.relatedWrap}>
                       {relatedTerms.map(rt => (
-                        <TouchableOpacity 
-                          key={rt.term} 
-                          style={[styles.relatedChip, { backgroundColor: theme.colors.border + '20' }]}
+                        <TouchableOpacity
+                          key={rt.term}
+                          style={[styles.relatedChip, { backgroundColor: theme.colors.border + '30', borderColor: theme.colors.border }]}
                           onPress={() => setSelectedTerm(rt)}
                         >
-                          <Text style={[styles.relatedChipText, { color: theme.colors.text }]}>{rt.term}</Text>
+                          <Text style={[styles.relatedText, { color: theme.colors.text }]}>{rt.term}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
                   </View>
                 )}
 
-                <View style={styles.sheetFooter}>
-                  <View style={[styles.categoryTag, { backgroundColor: theme.colors.border + '40' }]}>
-                    <Layers size={14} color={theme.colors.textSecondary} />
-                    <Text style={[styles.categoryTagText, { color: theme.colors.textSecondary }]}>
-                      {selectedTerm.category}
-                    </Text>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={[styles.closeActionBtn, { backgroundColor: theme.colors.primary }]}
-                    onPress={() => setIsDetailVisible(false)}
-                  >
-                    <Text style={styles.closeActionText}>Got it</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity style={[styles.gotItBtn, { backgroundColor: theme.colors.primary }]} onPress={() => setIsDetailVisible(false)}>
+                  <Text style={styles.gotItText}>Got it ✓</Text>
+                </TouchableOpacity>
               </View>
             )}
           </Animated.View>
         </View>
       </Modal>
 
-      {/* --- Filter Bottom Sheet (Modal) --- */}
-      <Modal
-        visible={isFilterVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsFilterVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.dismissOverlay} onPress={() => setIsFilterVisible(false)} />
-          <Animated.View 
-            style={[
-              styles.filterSheet, 
-              { 
-                backgroundColor: theme.colors.card,
-                transform: [{ translateY: panY }]
-              }
-            ]}
-            {...panResponder.panHandlers}
+      {/* ── Filter Sheet ── */}
+      <Modal visible={isFilterVisible} transparent animationType="fade" onRequestClose={() => setIsFilterVisible(false)}>
+        <View style={styles.overlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setIsFilterVisible(false)} />
+          <Animated.View
+            style={[styles.filterSheet, { backgroundColor: theme.colors.card, transform: [{ translateY: sheetPanY }] }]}
+            {...sheetPanResponder.panHandlers}
           >
-            <View style={styles.sheetHandle} />
+            <View style={styles.handle} />
             <Text style={[styles.filterTitle, { color: theme.colors.text }]}>Filter by Category</Text>
-            
             <View style={styles.filterGrid}>
               {CATEGORIES.map(cat => (
                 <TouchableOpacity
                   key={cat}
                   style={[
                     styles.filterChip,
-                    { backgroundColor: activeCategory === cat ? theme.colors.primary : theme.colors.border + '30' }
+                    {
+                      backgroundColor: activeCategory === cat ? theme.colors.primary : theme.colors.border + '30',
+                      borderColor: activeCategory === cat ? theme.colors.primary : 'transparent',
+                    },
                   ]}
-                  onPress={() => {
-                    setActiveCategory(cat);
-                    setIsFilterVisible(false);
-                  }}
+                  onPress={() => { setActiveCategory(cat); setIsFilterVisible(false); }}
                 >
-                  <Text style={[
-                    styles.filterChipText,
-                    { color: activeCategory === cat ? '#FFF' : theme.colors.textSecondary }
-                  ]}>
+                  <Text style={[styles.filterChipText, { color: activeCategory === cat ? '#FFF' : theme.colors.textSecondary }]}>
                     {cat}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            
-            <TouchableOpacity 
-              style={[styles.filterCloseBtn, { backgroundColor: theme.colors.border + '40' }]}
+            <TouchableOpacity
+              style={[styles.cancelBtn, { backgroundColor: theme.colors.border + '40' }]}
               onPress={() => setIsFilterVisible(false)}
             >
-              <Text style={{ fontWeight: '700', color: theme.colors.textSecondary }}>Cancel</Text>
+              <Text style={{ fontWeight: '700', fontSize: 15, color: theme.colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -406,322 +645,221 @@ export const WordsToKnowScreen = ({ onBack }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+
+  // Header
   header: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 24,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     ...baseTheme.shadows.light,
   },
-  headerTop: {
+  headerNormal: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 10,
   },
   backBtn: {
-    marginRight: 12,
-  },
-  titleContainer: {
-    flex: 1,
+    padding: 4,
+    marginLeft: -4,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '900',
-    letterSpacing: -1,
+    letterSpacing: -0.7,
   },
-  headerSubtitle: {
-    fontSize: 14,
+  headerCount: {
+    fontSize: 12,
     fontWeight: '600',
-    marginTop: -2,
+    marginTop: 1,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  filterDot: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF3B30',
+    borderWidth: 1.5,
+    borderColor: '#FFF',
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    position: 'absolute',
+    top: 8,
+    left: 20,
+    right: 20,
+    bottom: 14,
   },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    height: 50,
-    borderRadius: 16,
-    gap: 12,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 1,
+    paddingHorizontal: 13,
+    gap: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#000',
   },
-  filterBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
+  clearBtn: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
   },
-  filterBtnActive: {
-    transform: [{ scale: 1.05 }],
+  activeCatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
   },
-  filterDot: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF3B30',
-    borderWidth: 2,
-    borderColor: '#FFF',
+  activeCatText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
-  listContent: {
-    paddingVertical: 10,
+
+  // Body — row layout: list takes flex:1, sidebar is fixed column
+  body: {
+    flex: 1,
+    flexDirection: 'row',
+    overflow: 'hidden',
   },
+  listContent: { paddingVertical: 4 },
+
+  // Term item
   termItem: {
+    height: ITEM_HEIGHT,
+    justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  termRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20,
+    gap: 12,
   },
-  termItemLeft: {
-    flex: 1,
-  },
-  termItemTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  termItemAmharic: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 4,
-    opacity: 0.8,
-  },
-  termItemRight: {
-    flexDirection: 'row',
+  termLeft: { flex: 1 },
+  termTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  termSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
+  catPill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
+  catPillText: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+
+  // Sidebar — fixed-width column, naturally vertical beside SectionList
+  sidebar: {
+    width: 28,
+    flexDirection: 'column',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    paddingVertical: 8,
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
   },
-  itemCategoryTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  itemCategoryText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  modalOverlay: {
+  sidebarRow: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 28,
+    minHeight: 8,
+  },
+  sidebarLetter: { fontSize: 9.5, fontWeight: '700', textAlign: 'center' },
+  sidebarLetterActive: { fontSize: 11, fontWeight: '900' },
+
+  // Floating bubble — centred over the list
+  bubble: {
+    position: 'absolute',
+    left: '35%',
+    top: '38%',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+  },
+  bubbleLetter: { fontSize: 32, fontWeight: '900', color: '#FFF' },
+
+  // Empty
+  emptyContainer: { alignItems: 'center', marginTop: 100, gap: 10 },
+  emptyTitle: { fontSize: 20, fontWeight: '800' },
+  emptySubtitle: { fontSize: 14, fontWeight: '500' },
+
+  // Sheets
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.42)',
     justifyContent: 'flex-end',
   },
-  dismissOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  handle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: '#CCC',
+    alignSelf: 'center', marginBottom: 20,
   },
   detailSheet: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 44 : 32,
     minHeight: SCREEN_HEIGHT * 0.5,
   },
+  sheetBody: { paddingHorizontal: 24 },
+  sheetTopRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14, gap: 10 },
+  sheetTerm: { fontSize: 28, fontWeight: '900', letterSpacing: -0.8, marginBottom: 8 },
+  sheetCatBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  sheetCatText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  sheetActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  actionBtn: { width: 38, height: 38, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
+  amharicCard: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 16 },
+  amharicLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4, marginBottom: 4 },
+  amharicText: { fontSize: 17, fontWeight: '700', lineHeight: 24 },
+  defText: { fontSize: 16, lineHeight: 26, fontWeight: '500', marginBottom: 16 },
+  tipCard: { backgroundColor: '#FFF8E6', borderWidth: 1, borderColor: '#FFE082', borderRadius: 14, padding: 14, marginBottom: 20 },
+  tipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  tipTitle: { fontSize: 10, fontWeight: '900', color: '#D48800', letterSpacing: 0.5 },
+  tipText: { fontSize: 14, lineHeight: 21, color: '#8A5800', fontWeight: '600' },
+  relatedSection: { marginBottom: 22 },
+  relatedLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 10 },
+  relatedWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  relatedChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
+  relatedText: { fontSize: 13, fontWeight: '700' },
+  gotItBtn: { height: 50, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  gotItText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+
+  // Filter
   filterSheet: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 44 : 32,
     paddingHorizontal: 24,
   },
-  sheetHandle: {
-    width: 40,
-    height: 5,
-    borderRadius: 10,
-    backgroundColor: '#CCC',
-    alignSelf: 'center',
-    marginBottom: 24,
-  },
-  sheetContent: {
-    paddingHorizontal: 28,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-  },
-  sheetTerm: {
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: -1,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionBtnIcon: {
-    padding: 10,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-  },
-  definitionBox: {
-    marginBottom: 24,
-  },
-  sheetDefinition: {
-    fontSize: 17,
-    lineHeight: 26,
-    fontWeight: '500',
-    marginBottom: 16,
-  },
-  amharicCard: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-  },
-  amharicCardLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  amharicCardText: {
-    fontSize: 17,
-    lineHeight: 24,
-    fontWeight: '700',
-  },
-  proTipCard: {
-    backgroundColor: '#FFF8E6',
-    borderWidth: 1,
-    borderColor: '#FFE082',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 8,
-  },
-  proTipHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  proTipTitle: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#D48800',
-    letterSpacing: 0.5,
-  },
-  proTipText: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#8A5800',
-    fontWeight: '600',
-  },
-  relatedSection: {
-    marginBottom: 30,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  relatedGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  relatedChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#EEE',
-  },
-  relatedChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  sheetFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  closeActionBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 16,
-  },
-  closeActionText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  filterTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  filterGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 30,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  filterChipText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  filterCloseBtn: {
-    height: 50,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  categoryTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
-  },
-  categoryTagText: {
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    marginTop: 80,
-    gap: 16,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#AAA',
-  },
+  filterTitle: { fontSize: 20, fontWeight: '900', marginBottom: 20, textAlign: 'center', letterSpacing: -0.5 },
+  filterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5 },
+  filterChipText: { fontSize: 13, fontWeight: '700' },
+  cancelBtn: { height: 50, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
 });
