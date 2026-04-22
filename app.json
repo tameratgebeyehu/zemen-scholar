@@ -4,7 +4,7 @@
     "slug": "zemen-scholar",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/black icon.png",
+    "icon": "./src/assets/white icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./src/assets/black icon.png",
@@ -21,12 +21,12 @@
     "android": {
       "package": "com.zemenscholar.app",
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/black icon.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./src/assets/white icon.png",
+        "backgroundColor": "#000000"
       }
     },
     "web": {
-      "favicon": "./src/assets/black icon.png"
+      "favicon": "./src/assets/white icon.png"
     },
     "extra": {
       "eas": {
