@@ -1,6 +1,6 @@
 # 🎓 Zemen Scholar
 
-![Zemen Scholar Banner](https://via.placeholder.com/1200x400/000000/FFFFFF?text=Zemen+Scholar)
+![Zemen Scholar Banner](./src/assets/banner.png)
 
 > **Empowering students to achieve their global education dreams.** 
 
